@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PWM Motor Lab — RA6E2</title>
+<style>
+  :root{
+    --panel:#0d1420;--panel-2:#111c2c;--surface:#16233a;--line:#243a56;
+    --ink:#e8eff8;--mute:#8ba0bd;
+    --sig:#3ef0a6;--heat:#ffb02e;--blue:#4aa3f0;--bad:#ff6b7a;--gnd:#8ba0bd;
+    --mono:ui-monospace,"SF Mono","Cascadia Code","Consolas",monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{font-family:var(--sans);color:var(--ink);background-color:#0a1017;
+    background:radial-gradient(1200px 600px at 70% -10%,#13233a 0,transparent 60%),linear-gradient(180deg,#0a1017,#0c1420);
+    min-height:100vh;line-height:1.55;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1000px;margin:0 auto;padding:22px 18px 60px}
+
+  header{display:flex;flex-wrap:wrap;align-items:flex-end;gap:14px 20px;border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:22px}
+  .brand{display:flex;flex-direction:column;gap:2px;margin-right:auto}
+  .brand h1{margin:0;font-size:clamp(22px,3.4vw,30px);letter-spacing:-.5px;font-weight:800}
+  .brand h1 .thin{font-weight:400;color:var(--mute)}
+  .brand p{margin:0;color:var(--mute);font-size:13px}
+  .tabs{display:flex;gap:8px;flex-wrap:wrap}
+  .tab{font-family:var(--mono);font-size:12px;letter-spacing:.5px;background:var(--panel-2);color:var(--mute);
+    border:1px solid var(--line);border-radius:8px;padding:8px 13px;cursor:pointer;transition:.18s;
+    display:flex;flex-direction:column;line-height:1.25;min-width:96px}
+  .tab b{color:var(--ink);font-size:12.5px;font-family:var(--sans);font-weight:700;letter-spacing:0}
+  .tab.on{border-color:var(--sig);color:var(--sig);box-shadow:0 0 0 1px var(--sig),0 0 22px -6px var(--sig)}
+  .tab:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+
+  .page{display:none}
+  .page.on{display:block;animation:fade .3s ease}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+
+  h2.sec{font-size:19px;margin:30px 0 12px;font-weight:700;display:flex;align-items:center;gap:10px}
+  h2.sec::before{content:"";width:9px;height:9px;border-radius:2px;background:var(--sig);box-shadow:0 0 10px var(--sig)}
+  p.lead{color:var(--mute);max-width:66ch;margin:0 0 8px}
+  .k{color:var(--sig);font-weight:600}.ka{color:var(--heat);font-weight:600}.kb{color:var(--blue);font-weight:600}
+
+  .scope{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:inset 0 1px 0 #ffffff0d,0 20px 40px -30px #000}
+  .scope-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px}
+  .readout{font-family:var(--mono);font-size:12px;color:var(--mute);letter-spacing:.5px;display:flex;gap:16px;flex-wrap:wrap}
+  .readout b{color:var(--sig)}
+  canvas{width:100%;height:210px;display:block;border-radius:8px;background:linear-gradient(0deg,#08101c,#0a1422)}
+  .controls{display:flex;align-items:center;gap:16px;margin-top:16px;flex-wrap:wrap}
+  .dial{flex:1;min-width:220px}
+  .dial label{display:flex;justify-content:space-between;font-size:13px;color:var(--mute);margin-bottom:6px}
+  .dial label b{font-family:var(--mono);color:var(--ink)}
+  input[type=range]{width:100%;-webkit-appearance:none;appearance:none;height:6px;border-radius:6px;
+    background:linear-gradient(90deg,var(--sig) 0 var(--fill,45%),#22344e var(--fill,45%) 100%);cursor:pointer}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:#eafff5;border:3px solid var(--sig);box-shadow:0 0 12px -2px var(--sig)}
+  input[type=range]::-moz-range-thumb{width:20px;height:20px;border-radius:50%;background:#eafff5;border:3px solid var(--sig)}
+  input[type=range].amber{background:linear-gradient(90deg,var(--heat) 0 var(--fill,50%),#22344e var(--fill,50%) 100%)}
+  input[type=range].amber::-webkit-slider-thumb{border-color:var(--heat);box-shadow:0 0 12px -2px var(--heat)}
+  input[type=range].amber::-moz-range-thumb{border-color:var(--heat)}
+  input[type=range]:focus-visible{outline:2px solid var(--blue);outline-offset:4px}
+
+  .motor-cell{display:flex;flex-direction:column;align-items:center;gap:6px}
+  .motor-cell small{font-family:var(--mono);font-size:11px;color:var(--mute);letter-spacing:.5px}
+  .rpm{font-family:var(--mono);font-size:15px;color:var(--heat)}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:6px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .card h3{margin:0 0 6px;font-size:15px}
+  .card p{margin:0;color:var(--mute);font-size:14px}
+  .formula{font-family:var(--mono);font-size:14px;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin-top:12px;overflow-x:auto}
+  .formula .v{color:var(--heat)}
+
+  .pins{display:flex;gap:22px;margin-top:14px;flex-wrap:wrap}
+  .pin{display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:13px;color:var(--mute)}
+  .led{width:14px;height:14px;border-radius:50%;background:#26364e;border:1px solid var(--line);transition:.2s}
+  .led.hi{background:var(--sig);box-shadow:0 0 12px var(--sig);border-color:var(--sig)}
+  .btnrow{display:flex;gap:10px;margin-top:2px;flex-wrap:wrap}
+  .btn{font-family:var(--sans);font-size:14px;font-weight:600;border-radius:9px;padding:10px 18px;cursor:pointer;background:var(--panel-2);color:var(--ink);border:1px solid var(--line);transition:.16s}
+  .btn:hover{border-color:var(--blue)}
+  .btn.on{background:var(--heat);color:#20140a;border-color:var(--heat)}
+  .btn.stop.on{background:var(--bad);border-color:var(--bad);color:#2a0d11}
+  .btn:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+
+  .path{display:flex;align-items:center;margin-top:14px;overflow-x:auto;padding-bottom:6px}
+  .node{flex:0 0 auto;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;text-align:center;min-width:78px;transition:.2s}
+  .node b{display:block;font-size:13px}.node small{color:var(--mute);font-size:11px}
+  .node.mcu{border-color:var(--blue);box-shadow:0 0 0 1px var(--blue) inset}
+  .node.glow{border-color:var(--sig);box-shadow:0 0 0 1px var(--sig),0 0 20px -6px var(--sig)}
+  .node.glow.pow{border-color:var(--heat);box-shadow:0 0 0 1px var(--heat),0 0 20px -6px var(--heat)}
+  .node.glow.gnd{border-color:var(--gnd);box-shadow:0 0 0 1px var(--gnd)}
+  .wire{flex:1 1 22px;min-width:22px;height:2px;background:var(--line);position:relative}
+  .wire .dot{position:absolute;top:-3px;width:8px;height:8px;border-radius:50%;background:var(--sig);box-shadow:0 0 8px var(--sig);animation:flow 2.4s linear infinite}
+  @keyframes flow{from{left:-8px;opacity:0}10%{opacity:1}90%{opacity:1}to{left:100%;opacity:0}}
+
+  /* wiring page */
+  .conns{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+  .conn{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:var(--panel-2);border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:11px 14px;cursor:pointer;transition:.15s;font-size:14px}
+  .conn:hover{border-color:var(--blue)}
+  .conn.on{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
+  .conn:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+  .tag{font-family:var(--mono);font-size:10.5px;letter-spacing:.5px;padding:3px 7px;border-radius:5px;flex:0 0 auto}
+  .tag.sig{background:#123726;color:var(--sig)}
+  .tag.pow{background:#3a2a0e;color:var(--heat)}
+  .tag.gnd{background:#22303f;color:var(--gnd)}
+  .detail{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;margin-top:12px;min-height:78px}
+  .detail h3{margin:0 0 6px;font-size:15px}
+  .detail p{margin:0;color:var(--mute);font-size:14px}
+  .rule{display:flex;gap:12px;align-items:flex-start;background:#3a1620;border:1px solid var(--bad);border-radius:12px;padding:14px 16px;margin-top:14px}
+  .rule b{color:var(--bad)}.rule p{margin:2px 0 0;color:var(--ink);font-size:14px}
+
+  /* code page */
+  .steps-nav{display:flex;gap:6px;margin-top:12px;flex-wrap:wrap}
+  .snum{font-family:var(--mono);font-size:12px;width:34px;height:34px;border-radius:8px;border:1px solid var(--line);background:var(--panel-2);color:var(--mute);cursor:pointer;transition:.15s}
+  .snum.on{border-color:var(--sig);color:var(--sig);box-shadow:0 0 0 1px var(--sig)}
+  .snum.done{color:var(--ink)}
+  .snum:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+  .code{background:#08101c;border:1px solid var(--line);border-radius:12px;padding:14px 4px 14px 0;margin-top:12px;overflow-x:auto}
+  .cl{font-family:var(--mono);font-size:13px;line-height:1.75;white-space:pre;padding:0 16px 0 14px;color:#c6d4e6;border-left:3px solid transparent}
+  .cl.hl{background:#123726;border-left-color:var(--sig);color:#eafff5}
+  .cl.cmt{color:#5f7a99}
+  .cl .cmt{color:#5f7a99}
+  .phase-note{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--sig);border-radius:0 10px 10px 0;padding:12px 15px;margin-top:12px;font-size:14px}
+  .phase-note b{color:var(--sig)}
+  .phase-head{display:flex;justify-content:space-between;align-items:baseline;margin-top:14px;flex-wrap:wrap;gap:6px}
+  .phase-head h3{margin:0;font-size:17px}
+  .phase-head span{font-family:var(--mono);font-size:12px;color:var(--mute)}
+  .navbtns{display:flex;gap:10px;margin-top:14px}
+
+  /* build page */
+  .prog{height:10px;border-radius:6px;background:#22344e;overflow:hidden;margin:10px 0 4px}
+  .prog i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--sig),var(--heat));transition:width .3s;border-radius:6px}
+  .progtxt{font-family:var(--mono);font-size:12px;color:var(--mute)}
+  .check{display:flex;align-items:flex-start;gap:12px;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-top:8px;cursor:pointer;transition:.15s}
+  .check:hover{border-color:var(--blue)}
+  .check:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+  .box{width:20px;height:20px;flex:0 0 auto;border-radius:6px;border:2px solid var(--line);margin-top:1px;display:flex;align-items:center;justify-content:center;transition:.15s}
+  .check.done .box{background:var(--sig);border-color:var(--sig)}
+  .box svg{width:12px;height:12px;opacity:0;transition:.15s}
+  .check.done .box svg{opacity:1}
+  .check .txt b{display:block;font-size:14px}
+  .check .txt small{color:var(--mute);font-size:12.5px}
+  .check.done .txt b{color:var(--mute);text-decoration:line-through}
+
+  .acc{margin-top:8px}
+  .acc-item{border:1px solid var(--line);border-radius:10px;margin-bottom:8px;overflow:hidden;background:var(--panel-2)}
+  .acc-h{width:100%;text-align:left;background:none;border:0;color:var(--ink);padding:12px 14px;cursor:pointer;font-size:14px;font-weight:600;display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .acc-h:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
+  .acc-h .pm{font-family:var(--mono);color:var(--heat);flex:0 0 auto}
+  .acc-b{max-height:0;overflow:hidden;transition:max-height .25s ease;color:var(--mute);font-size:14px}
+  .acc-b p{margin:0;padding:0 14px 13px}
+  .acc-item.open .acc-b{max-height:160px}
+
+  .quiz{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-top:8px}
+  .q{margin-bottom:18px}.q:last-of-type{margin-bottom:8px}
+  .q p.qt{margin:0 0 10px;font-weight:600}
+  .opt{display:block;width:100%;text-align:left;background:var(--panel-2);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:10px 13px;margin-bottom:8px;cursor:pointer;font-size:14px;transition:.14s}
+  .opt:hover{border-color:var(--blue)}
+  .opt:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+  .opt.correct{border-color:var(--sig);background:#123726;color:var(--sig)}
+  .opt.wrong{border-color:var(--bad);background:#3a1620;color:var(--bad)}
+  .opt:disabled{cursor:default}
+  .explain{font-size:13px;color:var(--mute);margin:2px 2px 0;display:none}
+  .explain.show{display:block}
+  .score{font-family:var(--mono);color:var(--heat);font-size:14px;margin-top:6px}
+  .res{list-style:none;padding:0;margin:8px 0 0}
+  .res li{background:var(--panel-2);border:1px solid var(--line);border-radius:9px;padding:11px 14px;margin-bottom:8px;font-size:14px}
+  .res li b{color:var(--ink)}.res li span{color:var(--mute)}
+
+  footer{margin-top:34px;border-top:1px solid var(--line);padding-top:14px;color:var(--mute);font-size:12px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+
+  @media(max-width:640px){
+    .grid2{grid-template-columns:1fr}
+    .controls{flex-direction:column;align-items:stretch}
+    .motor-cell{flex-direction:row;justify-content:center;gap:14px}
+    .tab{min-width:0;flex:1}
+  }
+  @media(prefers-reduced-motion:reduce){.wire .dot{display:none}.page{animation:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <h1>PWM Motor Lab <span class="thin">/ RA6E2</span></h1>
+      <p>An interactive bench for the DC‑motor speed &amp; direction project</p>
+    </div>
+    <div class="tabs" role="tablist">
+      <button class="tab on" id="tab1" role="tab" aria-selected="true" onclick="go(1)">CH1<b>Signal</b></button>
+      <button class="tab" id="tab2" role="tab" aria-selected="false" onclick="go(2)">CH2<b>Circuit</b></button>
+      <button class="tab" id="tab3" role="tab" aria-selected="false" onclick="go(3)">CH3<b>Wiring</b></button>
+      <button class="tab" id="tab4" role="tab" aria-selected="false" onclick="go(4)">CH4<b>Code</b></button>
+      <button class="tab" id="tab5" role="tab" aria-selected="false" onclick="go(5)">CH5<b>Build</b></button>
+    </div>
+  </header>
+
+  <!-- ============ CH1 SIGNAL ============ -->
+  <section class="page on" id="page1">
+    <h2 class="sec">Drive the signal, watch the motor</h2>
+    <p class="lead">The heart of the project. Move the knob: the trace shows the <span class="k">PWM square wave</span>
+      the board makes, and the motor spins at the speed that wave delivers. Wider on‑pulses mean more power.</p>
+    <div class="scope">
+      <div class="scope-top">
+        <div class="readout">
+          <span>CH1 · PWM&nbsp; <b id="rDuty">45%</b></span>
+          <span>ON‑TIME&nbsp; <b id="rOn">45</b> / 100</span>
+          <span>FREQ&nbsp; <b>20 kHz</b></span>
+        </div>
+        <div class="rpm">≈ <span id="rRpm">2700</span> rpm</div>
+      </div>
+      <canvas id="scope" width="900" height="210"></canvas>
+      <div class="controls">
+        <div class="dial">
+          <label for="duty">Duty cycle (the speed knob) <b id="dLbl">45%</b></label>
+          <input type="range" id="duty" min="0" max="100" value="45" aria-label="Duty cycle percent">
+        </div>
+        <div class="motor-cell">
+          <svg id="motor1" width="86" height="86" viewBox="0 0 100 100" aria-label="motor spinning"></svg>
+          <small>MOTOR</small>
+        </div>
+      </div>
+    </div>
+    <h2 class="sec">What duty cycle means</h2>
+    <div class="grid2">
+      <div class="card"><h3>The one big idea</h3><p>PWM flicks power on and off very fast. The share of time it stays
+        <span class="k">on</span> is the <span class="k">duty cycle</span>. 0% is off, 100% is full power. The whole project is really just choosing that percentage.</p></div>
+      <div class="card"><h3>Why it doesn't stutter</h3><p>The switching is far faster than the motor can react (~20,000 times a second), so it feels a smooth <span class="ka">average</span> power and spins steadily.</p></div>
+    </div>
+    <h2 class="sec">From knob to duty: the ADC step</h2>
+    <p class="lead">The board reads a voltage and turns it into a number from <span class="kb">0 to 4095</span> (a 12‑bit ADC). You scale that to a duty cycle. Slide the raw value and watch it convert.</p>
+    <div class="scope">
+      <div class="controls"><div class="dial">
+        <label for="adc">Raw ADC reading (knob position) <b id="adcLbl">1843</b></label>
+        <input type="range" id="adc" class="amber" min="0" max="4095" value="1843" aria-label="Raw ADC value">
+      </div></div>
+      <div class="formula">duty% = <span class="v" id="fA">1843</span> ÷ 4095 × 100 = <span class="v" id="fB">45.0</span>%</div>
+    </div>
+  </section>
+
+  <!-- ============ CH2 CIRCUIT ============ -->
+  <section class="page" id="page2">
+    <h2 class="sec">Direction: two pins, one motor</h2>
+    <p class="lead">Speed came from PWM. <span class="ka">Direction</span> comes from two on/off pins
+      (<span class="kb">IN1</span> and <span class="kb">IN2</span>) into the driver. One high and one low spins one way; swap them to reverse; both low stops it.</p>
+    <div class="scope">
+      <div class="controls" style="justify-content:space-between">
+        <div>
+          <div class="btnrow">
+            <button class="btn on" id="bFwd" onclick="setDir(1)">Forward</button>
+            <button class="btn" id="bRev" onclick="setDir(-1)">Reverse</button>
+            <button class="btn stop" id="bStop" onclick="setDir(0)">Stop</button>
+          </div>
+          <div class="pins">
+            <div class="pin">IN1 <span class="led hi" id="led1"></span> <span id="t1">HIGH</span></div>
+            <div class="pin">IN2 <span class="led" id="led2"></span> <span id="t2">LOW</span></div>
+          </div>
+        </div>
+        <div class="motor-cell">
+          <svg id="motor2" width="96" height="96" viewBox="0 0 100 100" aria-label="motor direction"></svg>
+          <small id="dirLbl">FORWARD</small>
+        </div>
+      </div>
+    </div>
+    <h2 class="sec">Why a driver at all?</h2>
+    <div class="grid2">
+      <div class="card"><h3>The board can't push the motor</h3><p>An MCU pin gives a tiny trickle of current — not enough to turn a motor, and a motor dumps voltage spikes back. Wire one directly and you risk <span class="ka">frying the board</span>.</p></div>
+      <div class="card"><h3>The driver does the muscle work</h3><p>The driver (like a <span class="kb">DRV8833</span>) takes your weak signal pins and switches the motor's own battery power. The board decides; the driver delivers.</p></div>
+    </div>
+    <h2 class="sec">The whole signal path</h2>
+    <p class="lead">Every piece in order. The pulses show where the live signal flows.</p>
+    <div class="path">
+      <div class="node"><b>Knob</b><small>voltage</small></div><div class="wire"><span class="dot"></span></div>
+      <div class="node"><b>ADC</b><small>0–4095</small></div><div class="wire"><span class="dot" style="animation-delay:.4s"></span></div>
+      <div class="node mcu"><b>RA6E2</b><small>decides</small></div><div class="wire"><span class="dot" style="animation-delay:.8s"></span></div>
+      <div class="node"><b>PWM</b><small>duty</small></div><div class="wire"><span class="dot" style="animation-delay:1.2s"></span></div>
+      <div class="node"><b>Driver</b><small>power</small></div><div class="wire"><span class="dot" style="animation-delay:1.6s"></span></div>
+      <div class="node"><b>Motor</b><small>spins</small></div>
+    </div>
+  </section>
+
+  <!-- ============ CH3 WIRING ============ -->
+  <section class="page" id="page3">
+    <h2 class="sec">Wire it up — tap a connection</h2>
+    <p class="lead">Five parts, eight connections. Tap any connection below: the two parts it links light up, and
+      you get the plain‑English reason for it. Colours mark <span class="k">signal</span>, <span class="ka">power</span>, and <span style="color:var(--gnd);font-weight:600">ground</span>.</p>
+    <div class="path" style="justify-content:space-between">
+      <div class="node" id="blk-pot"><b>Pot</b><small>knob</small></div><div class="wire" style="background:none"></div>
+      <div class="node mcu" id="blk-board"><b>RA6E2</b><small>board</small></div><div class="wire" style="background:none"></div>
+      <div class="node" id="blk-driver"><b>Driver</b><small>DRV8833</small></div><div class="wire" style="background:none"></div>
+      <div class="node" id="blk-motor"><b>Motor</b><small>output</small></div><div class="wire" style="background:none"></div>
+      <div class="node" id="blk-batt"><b>Battery</b><small>motor pwr</small></div>
+    </div>
+    <div class="conns" id="conns"></div>
+    <div class="detail" id="wDetail"><h3>Tap a connection to begin</h3><p>Each one explains which pins to join and why.</p></div>
+    <div class="rule">
+      <span style="font-size:20px">⚠️</span>
+      <div><b>The golden rule</b><p>Give the motor its own battery, and tie the board ground, driver ground, and battery negative together — one common ground. Skip this and nothing works (or worse).</p></div>
+    </div>
+  </section>
+
+  <!-- ============ CH4 CODE ============ -->
+  <section class="page" id="page4">
+    <h2 class="sec">The firmware, one phase at a time</h2>
+    <p class="lead">Build in five small phases — each one runs on its own. Step through them; the <span class="k">highlighted line</span>
+      is the key move in that phase. Function names follow Renesas FSP — confirm the exact ones your project generates.</p>
+    <div class="steps-nav" id="stepsNav"></div>
+    <div class="phase-head"><h3 id="phTitle"></h3><span id="phTag"></span></div>
+    <div class="code" id="phCode"></div>
+    <div class="phase-note" id="phNote"></div>
+    <div class="navbtns">
+      <button class="btn" onclick="stepPhase(-1)">‹ Previous</button>
+      <button class="btn" onclick="stepPhase(1)">Next ›</button>
+    </div>
+  </section>
+
+  <!-- ============ CH5 BUILD ============ -->
+  <section class="page" id="page5">
+    <h2 class="sec">Your build checklist</h2>
+    <p class="lead">Tick each phase as you finish it. Phase 3 is already a valid project; Phase 4 is the complete one.</p>
+    <div class="prog"><i id="progBar"></i></div>
+    <div class="progtxt" id="progTxt">0 of 5 done</div>
+    <div id="checklist"></div>
+
+    <h2 class="sec">When something breaks</h2>
+    <div class="acc" id="acc"></div>
+
+    <h2 class="sec">Quick check</h2>
+    <div class="quiz" id="quiz">
+      <div class="q" data-a="1"><p class="qt">1. A higher duty cycle makes the motor…</p>
+        <button class="opt" onclick="ans(this,0)">Spin slower</button>
+        <button class="opt" onclick="ans(this,1)">Spin faster</button>
+        <button class="opt" onclick="ans(this,2)">Change direction</button>
+        <p class="explain">More on‑time delivers more average power, so it spins faster.</p></div>
+      <div class="q" data-a="1"><p class="qt">2. What does the ADC do here?</p>
+        <button class="opt" onclick="ans(this,0)">Powers the motor</button>
+        <button class="opt" onclick="ans(this,1)">Turns the knob's voltage into a number (0–4095)</button>
+        <button class="opt" onclick="ans(this,2)">Sets the motor direction</button>
+        <p class="explain">It reads the knob as a number the board scales into a duty cycle.</p></div>
+      <div class="q" data-a="2"><p class="qt">3. Why not connect the motor straight to a board pin?</p>
+        <button class="opt" onclick="ans(this,0)">The pin is too slow</button>
+        <button class="opt" onclick="ans(this,1)">The motor spins the wrong way</button>
+        <button class="opt" onclick="ans(this,2)">The pin can't supply the current, and spikes can damage the board</button>
+        <p class="explain">Exactly why the driver, with its own supply, sits in between.</p></div>
+      <div class="q" data-a="0"><p class="qt">4. What sets the motor's direction?</p>
+        <button class="opt" onclick="ans(this,0)">Two GPIO pins (IN1 / IN2) high‑low state</button>
+        <button class="opt" onclick="ans(this,1)">The PWM frequency</button>
+        <button class="opt" onclick="ans(this,2)">The ADC value</button>
+        <p class="explain">One high, one low spins one way; swap them to reverse.</p></div>
+      <div class="q" data-a="2"><p class="qt">5. The single most important wiring rule is…</p>
+        <button class="opt" onclick="ans(this,0)">Use the shortest wires</button>
+        <button class="opt" onclick="ans(this,1)">Power the motor from the 3.3V pin</button>
+        <button class="opt" onclick="ans(this,2)">Share a common ground between board, driver and battery</button>
+        <p class="explain">Common ground is what lets the signals and power reference each other.</p></div>
+      <p class="score" id="score">Answered 0 / 5</p>
+    </div>
+
+    <h2 class="sec">Where to learn more</h2>
+    <ul class="res">
+      <li><b>Renesas RA6E2 Quick Start + e² studio getting‑started</b> <span>— official setup steps (renesas.com)</span></li>
+      <li><b>FSP documentation — GPT, ADC, IOPORT modules</b> <span>— the exact API names for your board</span></li>
+      <li><b>"PWM DC motor control on ARM Cortex‑M" tutorials</b> <span>— for the general concept</span></li>
+      <li><b>DRV8833 / L298N wiring guide</b> <span>— motor driver connections</span></li>
+    </ul>
+  </section>
+
+  <footer>
+    <span>PWM Motor Lab · a study aid for the RA6E2 project</span>
+    <span style="font-family:var(--mono)">CH1 signal · CH2 circuit · CH3 wiring · CH4 code · CH5 build</span>
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  window.go=function(n){
+    for(var i=1;i<=5;i++){
+      document.getElementById('page'+i).classList.toggle('on', i===n);
+      var t=document.getElementById('tab'+i);
+      t.classList.toggle('on', i===n); t.setAttribute('aria-selected', i===n);
+    }
+    if(n===1) sizeCanvas();
+  };
+
+  /* ---------- shared state ---------- */
+  var duty=0.45, dir=1;
+
+  /* ---------- scope ---------- */
+  var cv=document.getElementById('scope'), ctx=cv.getContext('2d');
+  function sizeCanvas(){
+    var dpr=window.devicePixelRatio||1, r=cv.getBoundingClientRect();
+    cv.width=Math.max(300,r.width)*dpr; cv.height=210*dpr; ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  window.addEventListener('resize',sizeCanvas);
+  function drawScope(phase){
+    var W=cv.clientWidth||900,H=210; ctx.clearRect(0,0,W,H);
+    ctx.strokeStyle='rgba(74,163,240,0.10)';ctx.lineWidth=1;
+    for(var x=0;x<=W;x+=W/12){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+    for(var y=0;y<=H;y+=H/6){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+    ctx.strokeStyle='rgba(74,163,240,0.22)';ctx.beginPath();ctx.moveTo(0,H/2);ctx.lineTo(W,H/2);ctx.stroke();
+    var ppc=96, hi=H*0.24, lo=H*0.78;
+    ctx.fillStyle='rgba(62,240,166,0.10)';ctx.beginPath();
+    var open=false,ox=0;
+    for(var qx=0;qx<=W;qx++){var p2=(((qx+phase)%ppc)+ppc)%ppc/ppc,on=p2<duty;
+      if(on&&!open){open=true;ox=qx;} if((!on||qx===W)&&open){ctx.rect(ox,hi,qx-ox,lo-hi);open=false;}}
+    ctx.fill();
+    ctx.lineWidth=2.4;ctx.strokeStyle='#3ef0a6';ctx.shadowColor='#3ef0a6';ctx.shadowBlur=10;ctx.beginPath();
+    var s=false;
+    for(var px=0;px<=W;px++){var pos=(((px+phase)%ppc)+ppc)%ppc/ppc,yv=(pos<duty)?hi:lo;
+      if(!s){ctx.moveTo(px,yv);s=true;}else ctx.lineTo(px,yv);}
+    ctx.stroke();ctx.shadowBlur=0;
+  }
+
+  /* ---------- motors ---------- */
+  function buildMotor(svg,c){
+    svg.innerHTML='<circle cx="50" cy="50" r="46" fill="#0c1626" stroke="#243a56" stroke-width="2"/>'+
+      '<circle cx="50" cy="50" r="34" fill="none" stroke="#1c2c44" stroke-width="6"/>'+
+      '<g class="rot">'+
+      '<rect x="47" y="12" width="6" height="38" rx="3" fill="'+c+'"/>'+
+      '<rect x="47" y="50" width="6" height="38" rx="3" fill="'+c+'" opacity="0.5"/>'+
+      '<rect x="12" y="47" width="38" height="6" rx="3" fill="'+c+'" opacity="0.75"/>'+
+      '<rect x="50" y="47" width="38" height="6" rx="3" fill="'+c+'" opacity="0.35"/></g>'+
+      '<circle cx="50" cy="50" r="7" fill="#0c1626" stroke="'+c+'" stroke-width="2.5"/>';
+    return svg.querySelector('.rot');
+  }
+  var rot1=buildMotor(document.getElementById('motor1'),'#ffb02e');
+  var rot2=buildMotor(document.getElementById('motor2'),'#ffb02e');
+  var a1=0,a2=0;
+
+  /* ---------- duty / adc ---------- */
+  var dEl=document.getElementById('duty');
+  function setDuty(v){duty=v/100;dEl.style.setProperty('--fill',v+'%');
+    document.getElementById('dLbl').textContent=v+'%';document.getElementById('rDuty').textContent=v+'%';
+    document.getElementById('rOn').textContent=v;document.getElementById('rRpm').textContent=Math.round(v/100*6000);}
+  dEl.addEventListener('input',function(){setDuty(+this.value);});
+  var aEl=document.getElementById('adc');
+  function setAdc(v){aEl.style.setProperty('--fill',(v/4095*100)+'%');
+    document.getElementById('adcLbl').textContent=v;document.getElementById('fA').textContent=v;
+    document.getElementById('fB').textContent=(v/4095*100).toFixed(1);}
+  aEl.addEventListener('input',function(){setAdc(+this.value);});
+
+  /* ---------- direction ---------- */
+  window.setDir=function(d){dir=d;
+    var i1=d===1,i2=d===-1;
+    document.getElementById('led1').classList.toggle('hi',i1);
+    document.getElementById('led2').classList.toggle('hi',i2);
+    document.getElementById('t1').textContent=i1?'HIGH':'LOW';
+    document.getElementById('t2').textContent=i2?'HIGH':'LOW';
+    document.getElementById('bFwd').classList.toggle('on',d===1);
+    document.getElementById('bRev').classList.toggle('on',d===-1);
+    document.getElementById('bStop').classList.toggle('on',d===0);
+    document.getElementById('dirLbl').textContent=d===1?'FORWARD':d===-1?'REVERSE':'STOPPED';};
+
+  /* ---------- wiring page ---------- */
+  var conns=[
+    {t:'sig',a:['pot','board'],label:'Pot wiper → ADC pin',h:'Reads the knob',p:'The potentiometer\u2019s middle (wiper) pin goes to an ADC‑capable pin. As you turn the knob the voltage changes, and the board reads it as 0–4095.'},
+    {t:'pow',a:['board','pot'],label:'3.3V → Pot end pin',h:'Powers the knob',p:'One outer pin of the pot connects to the board\u2019s 3.3V. This gives the knob a voltage to divide.'},
+    {t:'gnd',a:['board','pot'],label:'GND → Pot other end',h:'Reference for the knob',p:'The pot\u2019s other outer pin goes to board ground, so the wiper voltage swings cleanly between 0V and 3.3V.'},
+    {t:'sig',a:['board','driver'],label:'PWM pin → Driver input',h:'The speed signal',p:'The board\u2019s GPT/PWM output goes into a driver input. This pulsing signal sets how fast the motor turns.'},
+    {t:'sig',a:['board','driver'],label:'IN1 / IN2 → Driver',h:'Direction control',p:'Two plain GPIO pins go to the driver\u2019s direction inputs. Their high/low pattern decides which way the motor spins.'},
+    {t:'pow',a:['batt','driver'],label:'Battery + → Driver VM',h:'The motor\u2019s own power',p:'The motor\u2019s battery feeds the driver\u2019s motor‑power pin. Never power the motor from the board — this separate supply does it.'},
+    {t:'pow',a:['driver','motor'],label:'Driver OUT1/OUT2 → Motor',h:'Drives the motor',p:'The driver\u2019s two outputs connect to the motor\u2019s two terminals. The driver switches the battery power here.'},
+    {t:'gnd',a:['board','driver','batt'],label:'Common ground (tie all GND)',h:'The golden rule',p:'Board GND, driver GND and battery negative all join together. Without a shared ground the signals have nothing to reference.'}
+  ];
+  var cWrap=document.getElementById('conns');
+  conns.forEach(function(c,i){
+    var b=document.createElement('button');
+    b.className='conn'; b.setAttribute('type','button');
+    b.innerHTML='<span class="tag '+c.t+'">'+(c.t==='sig'?'SIGNAL':c.t==='pow'?'POWER':'GROUND')+'</span><span>'+c.label+'</span>';
+    b.onclick=function(){showConn(i);};
+    cWrap.appendChild(b);
+  });
+  function showConn(i){
+    var c=conns[i];
+    Array.prototype.forEach.call(cWrap.children,function(el,j){el.classList.toggle('on',j===i);});
+    ['pot','board','driver','motor','batt'].forEach(function(id){
+      var n=document.getElementById('blk-'+id);
+      n.classList.remove('glow','pow','gnd');
+      if(c.a.indexOf(id)>=0){n.classList.add('glow'); if(c.t==='pow')n.classList.add('pow'); if(c.t==='gnd')n.classList.add('gnd');}
+    });
+    document.getElementById('wDetail').innerHTML='<h3>'+c.h+'</h3><p>'+c.p+'</p>';
+  }
+
+  /* ---------- code page ---------- */
+  var C=function(t,hi,cmt){return {t:t,hi:!!hi,cmt:!!cmt};};
+  var phases=[
+    {title:'Phase 1 — Blink an LED',tag:'proves the toolchain',
+     lines:[C('/* confirm board + compiler + programmer all work */',0,1),
+            C('R_IOPORT_PinWrite(&g_ioport_ctrl, LED_PIN, BSP_IO_LEVEL_HIGH);',1),
+            C('R_BSP_SoftwareDelay(500, BSP_DELAY_UNITS_MILLISECONDS);'),
+            C('R_IOPORT_PinWrite(&g_ioport_ctrl, LED_PIN, BSP_IO_LEVEL_LOW);',1)],
+     note:'Do this first. If the LED blinks, your whole setup is good — so any later problem is your new code, not the tools.'},
+    {title:'Phase 2 — PWM on an LED',tag:'GPT timer module',
+     lines:[C('R_GPT_Open(&g_timer_ctrl, &g_timer_cfg);   // set up PWM',0),
+            C('R_GPT_Start(&g_timer_ctrl);                // start it'),
+            C('',0),
+            C('/* duty = 0..period. Try a mid value first. */',0,1),
+            C('R_GPT_DutyCycleSet(&g_timer_ctrl, duty, GPT_IO_PIN_GTIOCA);',1)],
+     note:'Point the PWM at an LED first (not the motor). If it fades brighter and dimmer as you change duty, your PWM works.'},
+    {title:'Phase 3 — Add the knob (ADC)',tag:'a complete project on its own',
+     lines:[C('R_ADC_Open(&g_adc_ctrl, &g_adc_cfg);',0),
+            C('R_ADC_ScanCfg(&g_adc_ctrl, &g_adc_channel_cfg);',0),
+            C('while (1) {',0),
+            C('    R_ADC_ScanStart(&g_adc_ctrl);',0),
+            C('    R_ADC_Read(&g_adc_ctrl, ADC_CHANNEL_0, &knob); // 0..4095',1),
+            C('    duty = (knob * period) / 4095;                 // scale',1),
+            C('    R_GPT_DutyCycleSet(&g_timer_ctrl, duty, GPT_IO_PIN_GTIOCA);',0),
+            C('}',0)],
+     note:'Now the knob changes the brightness live. Even with no motor yet, this is a finished, demonstrable project — a safe stopping point.'},
+    {title:'Phase 4 — Real motor + direction',tag:'the complete build',
+     lines:[C('/* forward: IN1 high, IN2 low */',0,1),
+            C('R_IOPORT_PinWrite(&g_ioport_ctrl, IN2_PIN, BSP_IO_LEVEL_LOW);',0),
+            C('R_IOPORT_PinWrite(&g_ioport_ctrl, IN1_PIN, BSP_IO_LEVEL_HIGH);',1),
+            C('',0),
+            C('/* read a button to flip direction or stop */',0,1),
+            C('R_IOPORT_PinRead(&g_ioport_ctrl, BTN_PIN, &state);',1)],
+     note:'Move the PWM wire to the driver. Knob = speed, button = direction. That is the full project.'},
+    {title:'Phase 5 — Closed‑loop PID (optional)',tag:'the impressive upgrade',
+     lines:[C('error     = target_speed - measured_speed;',0),
+            C('integral += error * dt;',0),
+            C('output    = Kp*error + Ki*integral + Kd*(error-prev)/dt;',1),
+            C('/* feed output into R_GPT_DutyCycleSet as the new duty */',0,1),
+            C('prev = error;',0)],
+     note:'Add a speed sensor and this loop, and the motor holds a set speed even under load. Optional — Phase 4 already stands complete.'}
+  ];
+  var phase=0;
+  var navWrap=document.getElementById('stepsNav');
+  phases.forEach(function(p,i){
+    var b=document.createElement('button'); b.className='snum'; b.textContent=i+1;
+    b.onclick=function(){setPhase(i);}; navWrap.appendChild(b);
+  });
+  function setPhase(i){
+    phase=Math.max(0,Math.min(phases.length-1,i));
+    var p=phases[phase];
+    document.getElementById('phTitle').textContent=p.title;
+    document.getElementById('phTag').textContent=p.tag;
+    var code=document.getElementById('phCode'); code.innerHTML='';
+    p.lines.forEach(function(l){
+      var d=document.createElement('div');
+      d.className='cl'+(l.hi?' hl':'')+(l.cmt?' cmt':'');
+      d.textContent=l.t===''?' ':l.t; code.appendChild(d);
+    });
+    document.getElementById('phNote').innerHTML='<b>Why this phase:</b> '+p.note;
+    Array.prototype.forEach.call(navWrap.children,function(el,j){
+      el.classList.toggle('on',j===phase); el.classList.toggle('done',j<phase);
+    });
+  }
+  window.stepPhase=function(d){setPhase(phase+d);};
+
+  /* ---------- build checklist ---------- */
+  var tasks=[
+    {b:'Phase 1 — LED blinks',s:'toolchain confirmed'},
+    {b:'Phase 2 — PWM fades an LED',s:'duty cycle working'},
+    {b:'Phase 3 — knob controls it (ADC)',s:'safe stopping point'},
+    {b:'Phase 4 — motor + direction',s:'complete project'},
+    {b:'Phase 5 — PID loop (optional)',s:'bonus upgrade'}
+  ];
+  var clWrap=document.getElementById('checklist'); var done=0;
+  tasks.forEach(function(t,i){
+    var el=document.createElement('div'); el.className='check'; el.tabIndex=0; el.setAttribute('role','checkbox'); el.setAttribute('aria-checked','false');
+    el.innerHTML='<span class="box"><svg viewBox="0 0 24 24" fill="none"><path d="M4 12l5 5L20 6" stroke="#08101c" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="txt"><b>'+t.b+'</b><small>'+t.s+'</small></span>';
+    function toggle(){el.classList.toggle('done');var on=el.classList.contains('done');el.setAttribute('aria-checked',on);
+      done+=on?1:-1; document.getElementById('progBar').style.width=(done/tasks.length*100)+'%';
+      document.getElementById('progTxt').textContent=done+' of '+tasks.length+' done'+(done===tasks.length?' — project finished! 🎉':'');}
+    el.onclick=toggle; el.onkeydown=function(e){if(e.key===' '||e.key==='Enter'){e.preventDefault();toggle();}};
+    clWrap.appendChild(el);
+  });
+
+  /* ---------- troubleshooting accordion ---------- */
+  var fixes=[
+    {q:'Motor does not move',a:'Check the common ground — the board GND and battery negative must be tied together. Also confirm the battery is charged and the driver has power.'},
+    {q:'Board resets when the motor starts',a:'The motor is drawing power from the board. Give the motor its own battery through the driver; never run it from the 3.3V pin.'},
+    {q:'Motor always runs full speed',a:'The duty isn\u2019t updating. Check that R_ADC_Read gives a changing value and that DutyCycleSet uses the right pin/channel.'},
+    {q:'Knob does nothing',a:'Wrong ADC channel. Re‑check which channel matches your knob pin in the FSP configuration.'},
+    {q:'Motor buzzes but won\u2019t spin',a:'PWM frequency too low or duty too small. Raise the frequency (~20 kHz) and increase the duty.'}
+  ];
+  var accWrap=document.getElementById('acc');
+  fixes.forEach(function(f){
+    var item=document.createElement('div'); item.className='acc-item';
+    var h=document.createElement('button'); h.className='acc-h'; h.type='button';
+    h.innerHTML='<span>'+f.q+'</span><span class="pm">+</span>';
+    var body=document.createElement('div'); body.className='acc-b'; body.innerHTML='<p>'+f.a+'</p>';
+    h.onclick=function(){var open=item.classList.toggle('open'); h.querySelector('.pm').textContent=open?'\u2212':'+';};
+    item.appendChild(h); item.appendChild(body); accWrap.appendChild(item);
+  });
+
+  /* ---------- quiz ---------- */
+  var answered=0, total=document.querySelectorAll('#quiz .q').length;
+  window.ans=function(btn,choice){
+    var q=btn.closest('.q'); if(q.dataset.done)return; q.dataset.done='1'; answered++;
+    var correct=+q.dataset.a, opts=q.querySelectorAll('.opt');
+    opts.forEach(function(o,i){o.disabled=true; if(i===correct)o.classList.add('correct'); else if(i===choice)o.classList.add('wrong');});
+    q.querySelector('.explain').classList.add('show');
+    document.getElementById('score').textContent='Answered '+answered+' / '+total;
+  };
+
+  /* ---------- loop ---------- */
+  var last=performance.now(),ph=0;
+  function loop(now){var dt=(now-last)/1000;last=now;
+    if(!reduce)ph+=dt*140; drawScope(ph);
+    a1+=dt*(duty*3)*360; rot1.setAttribute('transform','rotate('+a1+' 50 50)');
+    a2+=dt*dir*1.6*360;  rot2.setAttribute('transform','rotate('+a2+' 50 50)');
+    requestAnimationFrame(loop);}
+
+  /* ---------- init ---------- */
+  sizeCanvas(); setDuty(45); setAdc(1843); setDir(1); setPhase(0);
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
